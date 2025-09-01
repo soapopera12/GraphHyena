@@ -1,0 +1,13 @@
+# Ignore Python cache files and folders
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Ignore everything inside the logs folder but keep the folder itself
+logs/*
+!logs/.gitkeep
+
+# Ignore everything inside the saved_models folder but keep the folder itself
+saved_models/*
+!saved_models/.gitkeep
