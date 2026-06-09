@@ -2,8 +2,10 @@ import numpy as np
 import pandas as pd
 from tabulate import tabulate
 
+
 def pprint_df(df, tablefmt='psql'):
     print(tabulate(df, headers='keys', tablefmt=tablefmt))
+
 
 if __name__ == "__main__":
     all_datasets = ['wikipedia', 'reddit', 'mooc', 'lastfm', 'myket', 'enron', 'SocialEvo', 'uci',

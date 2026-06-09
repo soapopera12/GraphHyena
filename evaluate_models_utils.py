@@ -36,11 +36,18 @@ def evaluate_model_link_prediction(model_name: str, model: nn.Module, neighbor_s
     assert evaluate_neg_edge_sampler.seed is not None
     evaluate_neg_edge_sampler.reset_random_state()
 
-    if model_name in ['DyRep', 'TGAT', 'TGN', 'CAWN', 'TCL', 'GraphMixer', 'DyGFormer', 'GraphHyena']:
+    if model_name in ['DyRep', 'TGAT', 'TGN', 'CAWN', 'TCL', 'GraphMixer', 'DyGFormer', 'GraphLSTM']:
         # evaluation phase use all the graph information
         model[0].set_neighbor_sampler(neighbor_sampler)
 
     model.eval()
+
+    # Initialize CUDA timers
+    start_event = torch.cuda.Event(enable_timing=True)
+    end_event = torch.cuda.Event(enable_timing=True)
+    
+    total_gpu_time_ms = 0.0
+    num_batches = 0
 
     with torch.no_grad():
         # store evaluate losses and metrics
@@ -62,6 +69,8 @@ def evaluate_model_link_prediction(model_name: str, model: nn.Module, neighbor_s
                 _, batch_neg_dst_node_ids = evaluate_neg_edge_sampler.sample(size=len(batch_src_node_ids))
                 batch_neg_src_node_ids = batch_src_node_ids
 
+            start_event.record()
+            
             # we need to compute for positive and negative edges respectively, because the new sampling strategy (for evaluation) allows the negative source nodes to be
             # different from the source nodes, this is different from previous works that just replace destination nodes with negative destination nodes
             if model_name in ['TGAT', 'CAWN', 'TCL']:
@@ -120,7 +129,7 @@ def evaluate_model_link_prediction(model_name: str, model: nn.Module, neighbor_s
                                                                       node_interact_times=batch_node_interact_times,
                                                                       num_neighbors=num_neighbors,
                                                                       time_gap=time_gap)
-            elif model_name in ['GraphHyena']:
+            elif model_name in ['GraphLSTM']:
                 # get temporal embedding of source and destination nodes
                 # two Tensors, with shape (batch_size, node_feat_dim)
                 batch_src_node_embeddings, batch_dst_node_embeddings = \
@@ -154,11 +163,20 @@ def evaluate_model_link_prediction(model_name: str, model: nn.Module, neighbor_s
                                                                       node_interact_times=batch_node_interact_times)
             else:
                 raise ValueError(f"Wrong value for model_name {model_name}!")
-            # get positive and negative probabilities, shape (batch_size, )
             
+            # get positive and negative probabilities, shape (batch_size, )
             positive_probabilities = model[1](input_1=batch_src_node_embeddings, input_2=batch_dst_node_embeddings).squeeze(dim=-1).sigmoid()
             negative_probabilities = model[1](input_1=batch_neg_src_node_embeddings, input_2=batch_neg_dst_node_embeddings).squeeze(dim=-1).sigmoid()
 
+            
+            end_event.record()
+            torch.cuda.synchronize() # Wait for GPU to finish
+
+            # Accumulate GPU time for this batch
+            batch_gpu_time = start_event.elapsed_time(end_event)
+            total_gpu_time_ms += batch_gpu_time
+            num_batches += 1
+            
             predicts = torch.cat([positive_probabilities, negative_probabilities], dim=0)
             labels = torch.cat([torch.ones_like(positive_probabilities), torch.zeros_like(negative_probabilities)], dim=0)
 
@@ -170,7 +188,12 @@ def evaluate_model_link_prediction(model_name: str, model: nn.Module, neighbor_s
 
             evaluate_idx_data_loader_tqdm.set_description(f'evaluate for the {batch_idx + 1}-th batch, evaluate loss: {loss.item()}')
 
-            evaluate_metrics.append(get_link_prediction_metrics(predicts=predicts, labels=labels))
+        total_gpu_time_seconds = total_gpu_time_ms / 1000.0
+        avg_latency_per_batch = total_gpu_time_ms / num_batches
+        
+        # logging.info(f"\n[TIMING REPORT]")
+        # logging.info(f"Total GPU Time for this split: {total_gpu_time_seconds:.4f} seconds")
+        # logging.info(f"GPU Latency per batch: {avg_latency_per_batch:.2f} ms/batch")
 
     return evaluate_losses, evaluate_metrics
 

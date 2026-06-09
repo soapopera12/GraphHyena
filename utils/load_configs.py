@@ -15,7 +15,7 @@ def get_link_prediction_args(is_evaluation: bool = False):
                         choices=['wikipedia', 'reddit', 'mooc', 'lastfm', 'myket', 'enron', 'SocialEvo', 'uci', 'Flights', 'CanParl', 'USLegis', 'UNtrade', 'UNvote', 'Contacts'])
     parser.add_argument('--batch_size', type=int, default=200, help='batch size')
     parser.add_argument('--model_name', type=str, default='DyGFormer', help='name of the model, note that EdgeBank is only applicable for evaluation',
-                        choices=['JODIE', 'DyRep', 'TGAT', 'TGN', 'CAWN', 'EdgeBank', 'TCL', 'GraphMixer', 'DyGFormer', 'GraphHyena'])
+                        choices=['JODIE', 'DyRep', 'TGAT', 'TGN', 'CAWN', 'EdgeBank', 'TCL', 'GraphMixer', 'DyGFormer', 'GraphLSTM'])
     parser.add_argument('--gpu', type=int, default=0, help='number of gpu to use')
     parser.add_argument('--num_neighbors', type=int, default=20, help='number of neighbors to sample for each node')
     parser.add_argument('--sample_neighbor_strategy', type=str, default='recent', choices=['uniform', 'recent', 'time_interval_aware'], help='how to sample historical neighbors')
@@ -25,12 +25,11 @@ def get_link_prediction_args(is_evaluation: bool = False):
     parser.add_argument('--num_walk_heads', type=int, default=8, help='number of heads used for the attention in walk encoder')
     parser.add_argument('--num_heads', type=int, default=2, help='number of heads used in attention layer')
     parser.add_argument('--num_layers', type=int, default=2, help='number of model layers')
+    parser.add_argument('--walk_length', type=int, default=1, help='length of each random walk')
     parser.add_argument('--hyena_dim', type=int, default=256, help='number of model layers')
     parser.add_argument('--hyena_depth', type=int, default=3, help='number of model layers')
-    parser.add_argument('--hyena_max_seq_len', type=int, default=1024, help='number of model layers')
     parser.add_argument('--num_channels', type=int, default=4, help='number of model layers')
-    parser.add_argument('--num_gMLP_layers', type=int, default=1, help='number of model layers')
-    parser.add_argument('--walk_length', type=int, default=1, help='length of each random walk')
+    parser.add_argument('--hyena_max_seq_len', type=int, default=1024, help='number of model layers')
     parser.add_argument('--time_gap', type=int, default=2000, help='time gap for neighbors to compute node features')
     parser.add_argument('--time_feat_dim', type=int, default=100, help='dimension of the time embedding')
     parser.add_argument('--position_feat_dim', type=int, default=172, help='dimension of the position embedding')
@@ -210,31 +209,6 @@ def load_link_prediction_best_configs(args: argparse.Namespace):
             args.sample_neighbor_strategy = 'uniform'
         else:
             args.sample_neighbor_strategy = 'recent'
-    # elif args.model_name == 'GraphHyena':
-    #     args.num_layers = 2
-    #     if args.dataset_name in ['wikipedia']:
-    #         args.num_neighbors = 40
-    #     elif args.dataset_name in ['reddit', 'lastfm']:
-    #         args.num_neighbors = 20
-    #     else:
-    #         args.num_neighbors = 20
-    #     if args.dataset_name in ['wikipedia', 'reddit', 'enron']:
-    #         args.dropout = 0.2
-    #     elif args.dataset_name in ['mooc', 'uci', 'USLegis']:
-    #         args.dropout = 0.2
-    #     elif args.dataset_name in ['lastfm', 'UNvote']:
-    #         args.dropout = 0.2
-    #     elif args.dataset_name in ['SocialEvo']:
-    #         args.dropout = 0.2
-    #     elif args.dataset_name in ['Flights', 'CanParl']:
-    #         args.dropout = 0.2
-    #     else:
-    #         args.dropout = 0.2
-    #     if args.dataset_name in ['CanParl', 'UNtrade', 'UNvote']:
-    #         args.sample_neighbor_strategy = 'uniform'
-    #     else:
-    #         args.sample_neighbor_strategy = 'recent'
-    #     args.num_gMLP_layers = 2
     elif args.model_name == 'DyGFormer':
         args.num_layers = 2
         if args.dataset_name in ['reddit']:
@@ -295,7 +269,7 @@ def get_node_classification_args():
     parser.add_argument('--max_input_sequence_length', type=int, default=32, help='maximal length of the input sequence of each node')
     parser.add_argument('--learning_rate', type=float, default=0.0001, help='learning rate')
     parser.add_argument('--dropout', type=float, default=0.1, help='dropout rate')
-    parser.add_argument('--num_epochs', type=int, default=50, help='number of epochs')
+    parser.add_argument('--num_epochs', type=int, default=100, help='number of epochs')
     parser.add_argument('--optimizer', type=str, default='Adam', choices=['SGD', 'Adam', 'RMSprop'], help='name of optimizer')
     parser.add_argument('--weight_decay', type=float, default=0.0, help='weight decay')
     parser.add_argument('--patience', type=int, default=20, help='patience for early stopping')
@@ -360,14 +334,6 @@ def load_node_classification_best_configs(args: argparse.Namespace):
             args.num_neighbors = 30
         args.dropout = 0.5
         args.sample_neighbor_strategy = 'recent'
-    # elif args.model_name == 'GraphHyena':
-    #     args.num_layers = 2
-    #     if args.dataset_name in ['reddit']:
-    #         args.num_neighbors = 10
-    #     else:
-    #         args.num_neighbors = 30
-    #     args.dropout = 0.5
-    #     args.sample_neighbor_strategy = 'recent'
     elif args.model_name == 'DyGFormer':
         args.num_layers = 2
         if args.dataset_name in ['reddit']:

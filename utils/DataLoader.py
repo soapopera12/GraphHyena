@@ -3,6 +3,7 @@ import numpy as np
 import random
 import pandas as pd
 
+
 class CustomizedDataset(Dataset):
     def __init__(self, indices_list: list):
         """
@@ -109,10 +110,11 @@ def get_link_prediction_data(dataset_name: str, val_ratio: float, test_ratio: fl
     num_total_unique_node_ids = len(node_set)
 
     # compute nodes which appear at test time
+    #test_node_set = set(src_node_ids[node_interact_times > val_time]).union(set(dst_node_ids[node_interact_times > val_time]))
     test_node_set = list(set(src_node_ids[node_interact_times > val_time]).union(set(dst_node_ids[node_interact_times > val_time])))
     # sample nodes which we keep as new nodes (to test inductiveness), so then we have to remove all their edges from training
     new_test_node_set = set(random.sample(test_node_set, int(0.1 * num_total_unique_node_ids)))
-
+    
     # mask for each source and destination to denote whether they are new test nodes
     new_test_source_mask = graph_df.u.map(lambda x: x in new_test_node_set).values
     new_test_destination_mask = graph_df.i.map(lambda x: x in new_test_node_set).values

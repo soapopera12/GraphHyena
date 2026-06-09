@@ -1,4 +1,3 @@
-import pickle
 import logging
 import time
 import sys
@@ -17,8 +16,8 @@ import torch.nn as nn
 # from models.TCL import TCL
 # from models.GraphMixer import GraphMixer
 # from models.DyGFormer import DyGFormer
+from models.GraphLSTM import GraphLSTM
 from models.modules import MergeLayer
-from models.GraphHyena import GraphHyena
 from utils.utils import set_random_seed, convert_to_gpu, get_parameter_sizes, create_optimizer
 from utils.utils import get_neighbor_sampler, NegativeEdgeSampler
 from evaluate_models_utils import evaluate_model_link_prediction
@@ -34,9 +33,6 @@ if __name__ == "__main__":
     # get arguments
     args = get_link_prediction_args(is_evaluation=False)
 
-    # print("Traning with transformer encoders!!!!!")
-    print(args.dataset_name, args.model_name , args.negative_sample_strategy)
-
     # get data for training, validation and testing
     node_raw_features, edge_raw_features, full_data, train_data, val_data, test_data, new_node_val_data, new_node_test_data = \
         get_link_prediction_data(dataset_name=args.dataset_name, val_ratio=args.val_ratio, test_ratio=args.test_ratio)
@@ -49,6 +45,9 @@ if __name__ == "__main__":
     full_neighbor_sampler = get_neighbor_sampler(data=full_data, sample_neighbor_strategy=args.sample_neighbor_strategy,
                                                  time_scaling_factor=args.time_scaling_factor, seed=1)
 
+    # initialize negative samplers, set seeds for validation and testing so negatives are the same across different runs
+    # in the inductive setting, negatives are sampled only amongst other new nodes
+    # train negative edge sampler does not need to specify the seed, but evaluation samplers need to do so
     train_neg_edge_sampler = NegativeEdgeSampler(src_node_ids=train_data.src_node_ids, dst_node_ids=train_data.dst_node_ids)
     val_neg_edge_sampler = NegativeEdgeSampler(src_node_ids=full_data.src_node_ids, dst_node_ids=full_data.dst_node_ids, seed=0)
     new_node_val_neg_edge_sampler = NegativeEdgeSampler(src_node_ids=new_node_val_data.src_node_ids, dst_node_ids=new_node_val_data.dst_node_ids, seed=1)
@@ -63,8 +62,6 @@ if __name__ == "__main__":
     new_node_test_idx_data_loader = get_idx_data_loader(indices_list=list(range(len(new_node_test_data.src_node_ids))), batch_size=args.batch_size, shuffle=False)
 
     val_metric_all_runs, new_node_val_metric_all_runs, test_metric_all_runs, new_node_test_metric_all_runs = [], [], [], []
-
-    print(f"Training on {args.device} device")
 
     for run in range(args.num_runs):
 
@@ -93,7 +90,6 @@ if __name__ == "__main__":
         logger.addHandler(ch)
 
         run_start_time = time.time()
-        save_model_weights = f'{args.model_name}_seed{args.seed}'
         logger.info(f"********** Run {run + 1} starts. **********")
 
         logger.info(f'configuration is {args}')
@@ -121,8 +117,8 @@ if __name__ == "__main__":
         elif args.model_name == 'GraphMixer':
             dynamic_backbone = GraphMixer(node_raw_features=node_raw_features, edge_raw_features=edge_raw_features, neighbor_sampler=train_neighbor_sampler,
                                           time_feat_dim=args.time_feat_dim, num_tokens=args.num_neighbors, num_layers=args.num_layers, dropout=args.dropout, device=args.device)
-        elif args.model_name == 'GraphHyena':            
-            dynamic_backbone = GraphHyena(node_raw_features=node_raw_features, edge_raw_features=edge_raw_features, neighbor_sampler=train_neighbor_sampler,
+        elif args.model_name == 'GraphLSTM':            
+            dynamic_backbone = GraphLSTM(node_raw_features=node_raw_features, edge_raw_features=edge_raw_features, neighbor_sampler=train_neighbor_sampler,
                                         time_feat_dim=args.time_feat_dim, patch_size=args.patch_size, max_input_sequence_length=args.max_input_sequence_length,
                                         channel_embedding_dim=args.channel_embedding_dim, hyena_dim=args.hyena_dim, 
                                          hyena_depth=args.hyena_depth, hyena_max_seq_len=args.hyena_max_seq_len,
@@ -134,29 +130,30 @@ if __name__ == "__main__":
                                          max_input_sequence_length=args.max_input_sequence_length, device=args.device)
         else:
             raise ValueError(f"Wrong value for model_name {args.model_name}!")
-
-        
         link_predictor = MergeLayer(input_dim1=node_raw_features.shape[1], input_dim2=node_raw_features.shape[1],
                                     hidden_dim=node_raw_features.shape[1], output_dim=1)
         model = nn.Sequential(dynamic_backbone, link_predictor)
-
         logger.info(f'model -> {model}')
         logger.info(f'model name: {args.model_name}, #parameters: {get_parameter_sizes(model) * 4} B, '
                     f'{get_parameter_sizes(model) * 4 / 1024} KB, {get_parameter_sizes(model) * 4 / 1024 / 1024} MB.')
 
         optimizer = create_optimizer(model=model, optimizer_name=args.optimizer, learning_rate=args.learning_rate, weight_decay=args.weight_decay)
+
         model = convert_to_gpu(model, device=args.device)
+
         save_model_folder = f"./saved_models/{args.model_name}/{args.dataset_name}/{args.save_model_name}/"
         shutil.rmtree(save_model_folder, ignore_errors=True)
         os.makedirs(save_model_folder, exist_ok=True)
+
         early_stopping = EarlyStopping(patience=args.patience, save_model_folder=save_model_folder,
-                                       save_model_name=save_model_weights, logger=logger, model_name=args.model_name)
+                                       save_model_name=args.save_model_name, logger=logger, model_name=args.model_name)
+
         loss_func = nn.BCELoss()
-        
+
         for epoch in range(args.num_epochs):
 
             model.train()
-            if args.model_name in ['DyRep', 'TGAT', 'TGN', 'CAWN', 'TCL', 'GraphMixer', 'DyGFormer', 'GraphHyena']:
+            if args.model_name in ['DyRep', 'TGAT', 'TGN', 'CAWN', 'TCL', 'GraphMixer', 'DyGFormer', 'GraphLSTM']:
                 # training, only use training graph
                 model[0].set_neighbor_sampler(train_neighbor_sampler)
             if args.model_name in ['JODIE', 'DyRep', 'TGN']:
@@ -173,7 +170,6 @@ if __name__ == "__main__":
                     train_data.node_interact_times[train_data_indices], train_data.edge_ids[train_data_indices]
 
                 _, batch_neg_dst_node_ids = train_neg_edge_sampler.sample(size=len(batch_src_node_ids))
-                
                 batch_neg_src_node_ids = batch_src_node_ids
 
                 # we need to compute for positive and negative edges respectively, because the new sampling strategy (for evaluation) allows the negative source nodes to be
@@ -234,7 +230,7 @@ if __name__ == "__main__":
                                                                           node_interact_times=batch_node_interact_times,
                                                                           num_neighbors=args.num_neighbors,
                                                                           time_gap=args.time_gap)
-                elif args.model_name in ['GraphHyena']:
+                elif args.model_name in ['GraphLSTM']:
                     # get temporal embedding of source and destination nodes
                     # Unpack all three return values, but ignore the third one for now.
                     batch_src_node_embeddings, batch_dst_node_embeddings = \
@@ -266,14 +262,18 @@ if __name__ == "__main__":
                 else:
                     raise ValueError(f"Wrong value for model_name {args.model_name}!")
                 # get positive and negative probabilities, shape (batch_size, )
-                
                 positive_probabilities = model[1](input_1=batch_src_node_embeddings, input_2=batch_dst_node_embeddings).squeeze(dim=-1).sigmoid()
                 negative_probabilities = model[1](input_1=batch_neg_src_node_embeddings, input_2=batch_neg_dst_node_embeddings).squeeze(dim=-1).sigmoid()
+
                 predicts = torch.cat([positive_probabilities, negative_probabilities], dim=0)
                 labels = torch.cat([torch.ones_like(positive_probabilities), torch.zeros_like(negative_probabilities)], dim=0)
+
                 loss = loss_func(input=predicts, target=labels)
+
+                train_losses.append(loss.item())
+
                 train_metrics.append(get_link_prediction_metrics(predicts=predicts, labels=labels))
-                
+
                 optimizer.zero_grad()
                 loss.backward()
                 optimizer.step()
@@ -329,9 +329,13 @@ if __name__ == "__main__":
             logger.info(f'new node validate loss: {np.mean(new_node_val_losses):.4f}')
             for metric_name in new_node_val_metrics[0].keys():
                 logger.info(f'new node validate {metric_name}, {np.mean([new_node_val_metric[metric_name] for new_node_val_metric in new_node_val_metrics]):.4f}')
-
-            # perform testing once after test_interval_epochs
+            
+            # perform testing once after test_interval_epochs            
             if (epoch + 1) % args.test_interval_epochs == 0:
+
+                logger.info("Starting Transductive Testing...")
+                transductive_start_time = time.time() # START CLOCK
+            
                 test_losses, test_metrics = evaluate_model_link_prediction(model_name=args.model_name,
                                                                            model=model,
                                                                            neighbor_sampler=full_neighbor_sampler,
@@ -346,6 +350,12 @@ if __name__ == "__main__":
                     # reload validation memory bank for new testing nodes
                     model[0].memory_bank.reload_memory_bank(val_backup_memory_bank)
 
+                transductive_total_time = time.time() - transductive_start_time # END CLOCK
+                logger.info(f"Total Transductive Test Time: {transductive_total_time:.4f} seconds")
+            
+                logger.info("Starting Inductive Testing...")
+                inductive_start_time = time.time() # START CLOCK
+            
                 new_node_test_losses, new_node_test_metrics = evaluate_model_link_prediction(model_name=args.model_name,
                                                                                              model=model,
                                                                                              neighbor_sampler=full_neighbor_sampler,
@@ -356,11 +366,15 @@ if __name__ == "__main__":
                                                                                              num_neighbors=args.num_neighbors,
                                                                                              time_gap=args.time_gap)
 
+                inductive_total_time = time.time() - inductive_start_time # END CLOCK
+                logger.info(f"Total Inductive Test Time: {inductive_total_time:.4f} seconds")
+
                 if args.model_name in ['JODIE', 'DyRep', 'TGN']:
                     # reload validation memory bank for testing nodes or saving models
                     # note that since model treats memory as parameters, we need to reload the memory to val_backup_memory_bank for saving models
                     model[0].memory_bank.reload_memory_bank(val_backup_memory_bank)
 
+            
                 logger.info(f'test loss: {np.mean(test_losses):.4f}')
                 for metric_name in test_metrics[0].keys():
                     logger.info(f'test {metric_name}, {np.mean([test_metric[metric_name] for test_metric in test_metrics]):.4f}')
@@ -368,6 +382,8 @@ if __name__ == "__main__":
                 for metric_name in new_node_test_metrics[0].keys():
                     logger.info(f'new node test {metric_name}, {np.mean([new_node_test_metric[metric_name] for new_node_test_metric in new_node_test_metrics]):.4f}')
 
+
+            
             # select the best model based on all the validate metrics
             val_metric_indicator = []
             for metric_name in val_metrics[0].keys():
@@ -375,7 +391,6 @@ if __name__ == "__main__":
             early_stop = early_stopping.step(val_metric_indicator, model)
 
             if early_stop:
-                print("Early stopping was here")
                 break
 
         # load the best model
@@ -492,7 +507,7 @@ if __name__ == "__main__":
 
         save_result_folder = f"./saved_results/{args.model_name}/{args.dataset_name}"
         os.makedirs(save_result_folder, exist_ok=True)
-        save_result_path = os.path.join(save_result_folder, f"{save_model_weights}.json")
+        save_result_path = os.path.join(save_result_folder, f"{args.save_model_name}.json")
 
         with open(save_result_path, 'w') as file:
             file.write(result_json)

@@ -3,40 +3,88 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-
 class TimeEncoder(nn.Module):
-
     def __init__(self, time_dim: int, parameter_requires_grad: bool = True):
         """
-        Time encoder.
+        Advanced SIREN-style Time encoder (Fourier Features + MLP).
         :param time_dim: int, dimension of time encodings
         :param parameter_requires_grad: boolean, whether the parameter in TimeEncoder needs gradient
         """
         super(TimeEncoder, self).__init__()
 
         self.time_dim = time_dim
-        # trainable parameters for time encoding
+        
+        # Base linear layer to compute frequency scalings (w * t + b)
         self.w = nn.Linear(1, time_dim)
+        # Log-linear initialization for frequencies
         self.w.weight = nn.Parameter((torch.from_numpy(1 / 10 ** np.linspace(0, 9, time_dim, dtype=np.float32))).reshape(time_dim, -1))
         self.w.bias = nn.Parameter(torch.zeros(time_dim))
+
+        # SOTA addition: MLP to learn complex combinatorial temporal patterns
+        # Mixes the independent periodic channels via continuous non-linearities
+        self.mlp = nn.Sequential(
+            nn.Linear(time_dim, time_dim * 2),
+            nn.GELU(),
+            nn.Linear(time_dim * 2, time_dim)
+        )
 
         if not parameter_requires_grad:
             self.w.weight.requires_grad = False
             self.w.bias.requires_grad = False
+            for param in self.mlp.parameters():
+                param.requires_grad = False
 
     def forward(self, timestamps: torch.Tensor):
         """
         compute time encodings of time in timestamps
         :param timestamps: Tensor, shape (batch_size, seq_len)
-        :return:
+        :return: Tensor, shape (batch_size, seq_len, time_dim)
         """
         # Tensor, shape (batch_size, seq_len, 1)
         timestamps = timestamps.unsqueeze(dim=2)
 
-        # Tensor, shape (batch_size, seq_len, time_dim)
-        output = torch.cos(self.w(timestamps))
+        # Continuous Periodic Representation
+        # Using Sine instead of Cosine is standard for SIREN networks
+        periodic_features = torch.sin(self.w(timestamps))
+        
+        # Project through MLP and add residual connection to preserve baseline frequencies
+        output = self.mlp(periodic_features) + periodic_features
 
         return output
+
+# class TimeEncoder(nn.Module):
+
+#     def __init__(self, time_dim: int, parameter_requires_grad: bool = True):
+#         """
+#         Time encoder.
+#         :param time_dim: int, dimension of time encodings
+#         :param parameter_requires_grad: boolean, whether the parameter in TimeEncoder needs gradient
+#         """
+#         super(TimeEncoder, self).__init__()
+
+#         self.time_dim = time_dim
+#         # trainable parameters for time encoding
+#         self.w = nn.Linear(1, time_dim)
+#         self.w.weight = nn.Parameter((torch.from_numpy(1 / 10 ** np.linspace(0, 9, time_dim, dtype=np.float32))).reshape(time_dim, -1))
+#         self.w.bias = nn.Parameter(torch.zeros(time_dim))
+
+#         if not parameter_requires_grad:
+#             self.w.weight.requires_grad = False
+#             self.w.bias.requires_grad = False
+
+#     def forward(self, timestamps: torch.Tensor):
+#         """
+#         compute time encodings of time in timestamps
+#         :param timestamps: Tensor, shape (batch_size, seq_len)
+#         :return:
+#         """
+#         # Tensor, shape (batch_size, seq_len, 1)
+#         timestamps = timestamps.unsqueeze(dim=2)
+
+#         # Tensor, shape (batch_size, seq_len, time_dim)
+#         output = torch.cos(self.w(timestamps))
+
+#         return output
 
 
 class MergeLayer(nn.Module):

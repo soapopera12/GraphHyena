@@ -19,3 +19,6 @@ We are grateful to the authors of
 [GraphMixer](https://github.com/CongWeilin/GraphMixer), and
 [DyGFormer](https://github.com/yule-BUAA/DyGLib.git) for making their project codes publicly available.
 
+
+
+python train_link_prediction.py --dataset_name uci --model_name GraphHyena --num_runs 1 --gpu 0 --patch_size 1 --max_input_sequence_length 32 --channel_embedding_dim 50 --dropout 0.1 --hyena_dim 128 --hyena_depth 1 --learning_rate 0.0001 --test_interval_epochs 1 --num_epochs 1
