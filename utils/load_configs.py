@@ -15,7 +15,7 @@ def get_link_prediction_args(is_evaluation: bool = False):
                         choices=['wikipedia', 'reddit', 'mooc', 'lastfm', 'myket', 'enron', 'SocialEvo', 'uci', 'Flights', 'CanParl', 'USLegis', 'UNtrade', 'UNvote', 'Contacts'])
     parser.add_argument('--batch_size', type=int, default=200, help='batch size')
     parser.add_argument('--model_name', type=str, default='DyGFormer', help='name of the model, note that EdgeBank is only applicable for evaluation',
-                        choices=['JODIE', 'DyRep', 'TGAT', 'TGN', 'CAWN', 'EdgeBank', 'TCL', 'GraphMixer', 'DyGFormer', 'GraphLSTM'])
+                        choices=['JODIE', 'DyRep', 'TGAT', 'TGN', 'CAWN', 'EdgeBank', 'TCL', 'GraphMixer', 'DyGFormer', 'GraphHyena'])
     parser.add_argument('--gpu', type=int, default=0, help='number of gpu to use')
     parser.add_argument('--num_neighbors', type=int, default=20, help='number of neighbors to sample for each node')
     parser.add_argument('--sample_neighbor_strategy', type=str, default='recent', choices=['uniform', 'recent', 'time_interval_aware'], help='how to sample historical neighbors')

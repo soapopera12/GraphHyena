@@ -23,14 +23,14 @@ import torch.fft
 from utils.utils import NeighborSampler
 from models.modules import TimeEncoder
 
-class GraphLSTM(nn.Module):
+class GraphHyena(nn.Module):
 
     def __init__(self, node_raw_features: np.ndarray, edge_raw_features: np.ndarray, neighbor_sampler: NeighborSampler,
                  time_feat_dim: int, patch_size: int , max_input_sequence_length: int,
                  channel_embedding_dim: int, hyena_dim: int=256, hyena_depth: int=3, hyena_max_seq_len: int=1024, 
                  num_channels: int = 4, dropout: float = 0.1, device: str = 'cpu'):
 
-        super(GraphLSTM, self).__init__()
+        super(GraphHyena, self).__init__()
 
         self.node_raw_features = torch.from_numpy(node_raw_features.astype(np.float32)).to(device)
         self.edge_raw_features = torch.from_numpy(edge_raw_features.astype(np.float32)).to(device)

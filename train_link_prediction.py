@@ -16,7 +16,7 @@ import torch.nn as nn
 # from models.TCL import TCL
 # from models.GraphMixer import GraphMixer
 # from models.DyGFormer import DyGFormer
-from models.GraphLSTM import GraphLSTM
+from models.GraphHyena import GraphHyena
 from models.modules import MergeLayer
 from utils.utils import set_random_seed, convert_to_gpu, get_parameter_sizes, create_optimizer
 from utils.utils import get_neighbor_sampler, NegativeEdgeSampler
@@ -117,8 +117,8 @@ if __name__ == "__main__":
         elif args.model_name == 'GraphMixer':
             dynamic_backbone = GraphMixer(node_raw_features=node_raw_features, edge_raw_features=edge_raw_features, neighbor_sampler=train_neighbor_sampler,
                                           time_feat_dim=args.time_feat_dim, num_tokens=args.num_neighbors, num_layers=args.num_layers, dropout=args.dropout, device=args.device)
-        elif args.model_name == 'GraphLSTM':            
-            dynamic_backbone = GraphLSTM(node_raw_features=node_raw_features, edge_raw_features=edge_raw_features, neighbor_sampler=train_neighbor_sampler,
+        elif args.model_name == 'GraphHyena':            
+            dynamic_backbone = GraphHyena(node_raw_features=node_raw_features, edge_raw_features=edge_raw_features, neighbor_sampler=train_neighbor_sampler,
                                         time_feat_dim=args.time_feat_dim, patch_size=args.patch_size, max_input_sequence_length=args.max_input_sequence_length,
                                         channel_embedding_dim=args.channel_embedding_dim, hyena_dim=args.hyena_dim, 
                                          hyena_depth=args.hyena_depth, hyena_max_seq_len=args.hyena_max_seq_len,
@@ -153,7 +153,7 @@ if __name__ == "__main__":
         for epoch in range(args.num_epochs):
 
             model.train()
-            if args.model_name in ['DyRep', 'TGAT', 'TGN', 'CAWN', 'TCL', 'GraphMixer', 'DyGFormer', 'GraphLSTM']:
+            if args.model_name in ['DyRep', 'TGAT', 'TGN', 'CAWN', 'TCL', 'GraphMixer', 'DyGFormer', 'GraphHyena']:
                 # training, only use training graph
                 model[0].set_neighbor_sampler(train_neighbor_sampler)
             if args.model_name in ['JODIE', 'DyRep', 'TGN']:
@@ -230,7 +230,7 @@ if __name__ == "__main__":
                                                                           node_interact_times=batch_node_interact_times,
                                                                           num_neighbors=args.num_neighbors,
                                                                           time_gap=args.time_gap)
-                elif args.model_name in ['GraphLSTM']:
+                elif args.model_name in ['GraphHyena']:
                     # get temporal embedding of source and destination nodes
                     # Unpack all three return values, but ignore the third one for now.
                     batch_src_node_embeddings, batch_dst_node_embeddings = \
