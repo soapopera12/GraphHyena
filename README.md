@@ -1,11 +1,25 @@
 # GraphHyena
 GraphHyena
 
-### Try running on UCI dataset
+### Try training and testing on UCI dataset
 
 We have already kept the dataset in the processed_data folder for the timebeing so it can be run directly 
 
-python train_link_prediction.py --dataset_name uci --model_name GraphHyena --num_runs 1 --gpu 0 --patch_size 1 --max_input_sequence_length 32 --channel_embedding_dim 50 --dropout 0.1 --hyena_dim 128 --hyena_depth 1 --learning_rate 0.0001 --test_interval_epochs 1 --num_epochs 1
+python train_link_prediction.py --dataset_name uci --model_name GraphHyena --num_runs 5 --gpu 0 --patch_size 1 \
+    --max_input_sequence_length 32 \
+    --channel_embedding_dim 50 --dropout 0.0 --hyena_dim 256 --hyena_depth 1 --learning_rate 0.0001
+
+python evaluate_link_prediction_time.py --dataset_name uci --model_name GraphHyena --num_runs 5 --gpu 0 --patch_size 1 \
+    --max_input_sequence_length 32 \
+    --channel_embedding_dim 50 --dropout 0.0 --hyena_dim 256 --hyena_depth 1 --learning_rate 0.0001 --negative_sample_strategy random
+
+python evaluate_link_prediction_time.py --dataset_name uci --model_name GraphHyena --num_runs 5 --gpu 0 --patch_size 1 \
+    --max_input_sequence_length 32 \
+    --channel_embedding_dim 50 --dropout 0.0 --hyena_dim 256 --hyena_depth 1 --learning_rate 0.0001 --negative_sample_strategy historical
+
+python evaluate_link_prediction_time.py --dataset_name uci --model_name GraphHyena --num_runs 5 --gpu 0 --patch_size 1 \
+    --max_input_sequence_length 32 \
+    --channel_embedding_dim 50 --dropout 0.0 --hyena_dim 256 --hyena_depth 1 --learning_rate 0.0001 --negative_sample_strategy inductive
 
 # Acknowledgments
 
