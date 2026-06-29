@@ -1,8 +1,6 @@
 # GraphHyena
 GraphHyena
 
-Code for : Big Data 2025 conference paper GraphHyena: A Hybrid Hyena-Driven Framework for Temporal Graph link Prediction (review phase)
-
 ### Try running on UCI dataset
 
 We have already kept the dataset in the processed_data folder for the timebeing so it can be run directly 
